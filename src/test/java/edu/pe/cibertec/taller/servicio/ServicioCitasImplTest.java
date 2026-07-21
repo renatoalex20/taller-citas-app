@@ -1,6 +1,8 @@
 package edu.pe.cibertec.taller.servicio;
 
 import edu.pe.cibertec.taller.excepcion.EspecialidadIncorrectaException;
+import edu.pe.cibertec.taller.excepcion.FechaInvalidaException;
+import edu.pe.cibertec.taller.excepcion.HorarioNoPermitidoException;
 import edu.pe.cibertec.taller.excepcion.MecanicoNoEncontradoException;
 import edu.pe.cibertec.taller.modelo.Cita;
 import edu.pe.cibertec.taller.modelo.EstadoCita;
@@ -113,33 +115,59 @@ class ServicioCitasImplTest {
 	@DisplayName("Un servicio pesado a las 15:00 se rechaza con HorarioNoPermitidoException")
 	void agendarServicioPesadoEnLaTarde() {
 		// Arrange
-		// TODO
+		LocalDate fechaCita = LocalDate.of(2026, 9, 18);
+		LocalDateTime fechaHoraInicio = fechaCita.atTime(15, 0);
+
+		Mecanico mecanico = new Mecanico(1L, "Alex Velazco", TipoServicio.REPARACION_MOTOR);
+		when(repositorioMecanicos.findById(1L)).thenReturn(Optional.of(mecanico));
 
 		// Act y Assert
-		// TODO
+		assertThrows(HorarioNoPermitidoException.class, () -> {
+			servicioCitas.agendarCita(1L, "VEL-028", TipoServicio.REPARACION_MOTOR, fechaHoraInicio);
+		});
+		verify(repositorioCitas, never()).save(any());
 	}
 
 	@Test
 	@DisplayName("Un servicio pesado a las 09:00 se acepta y se guarda")
 	void agendarServicioPesadoEnLaManana() {
 		// Arrange
-		// TODO
+		LocalDate fechaCita = LocalDate.of(2026, 9, 18);
+		LocalDateTime fechaHoraInicio = fechaCita.atTime(9, 0);
+
+		LocalDateTime relojSimulado = fechaCita.minusDays(1).atTime(8, 0);
+		when(proveedorFechaHora.ahora()).thenReturn(relojSimulado);
+
+		Mecanico mecanico = new Mecanico(1L, "Alex Velazco", TipoServicio.REPARACION_MOTOR);
+		when(repositorioMecanicos.findById(1L)).thenReturn(Optional.of(mecanico));
+		when(repositorioCitas.findByMecanicoIdAndEstado(eq(1L), any())).thenReturn(Collections.emptyList());
+		when(repositorioCitas.save(any(Cita.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		// Act
-		// TODO
+		Cita citaCreada = servicioCitas.agendarCita(1L, "VEL-028", TipoServicio.REPARACION_MOTOR, fechaHoraInicio);
 
 		// Assert
-		// TODO
+		assertEquals(EstadoCita.PROGRAMADA, citaCreada.getEstado());
+		verify(repositorioCitas, times(1)).save(any(Cita.class));
+		verify(servicioNotificaciones, times(1)).notificarCitaAgendada(any(Cita.class));
 	}
 
 	@Test
 	@DisplayName("Agendar en una fecha del pasado lanza FechaInvalidaException")
 	void agendarConFechaEnElPasado() {
 		// Arrange
-		// TODO: recuerden mockear proveedorFechaHora.ahora()
+		LocalDateTime ahora = LocalDateTime.of(2026, 9, 18, 10, 0);
+		when(proveedorFechaHora.ahora()).thenReturn(ahora);
+
+		LocalDateTime fechaEnElPasado = ahora.minusHours(2);
+		Mecanico mecanico = new Mecanico(1L, "Alex Velazco", TipoServicio.CAMBIO_ACEITE);
+		when(repositorioMecanicos.findById(1L)).thenReturn(Optional.of(mecanico));
 
 		// Act y Assert
-		// TODO
+		assertThrows(FechaInvalidaException.class, () -> {
+			servicioCitas.agendarCita(1L, "VEL-028", TipoServicio.CAMBIO_ACEITE, fechaEnElPasado);
+		});
+		verify(repositorioCitas, never()).save(any());
 	}
 
 	@Test
